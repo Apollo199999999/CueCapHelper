@@ -31,8 +31,9 @@ android {
 dependencies {
 
     implementation 'androidx.appcompat:appcompat:1.6.1'
-    implementation 'com.google.android.material:material:1.5.0'
-    implementation 'com.github.jiangdongguo.AndroidUSBCamera:libausbc:3.3.3'
+    implementation 'com.google.android.material:material:1.9.0'
+    implementation 'com.herohan:UVCAndroid:1.0.4'
+    implementation 'com.github.getActivity:XXPermissions:18.2'
     implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
     testImplementation 'junit:junit:4.13.2'
     androidTestImplementation 'androidx.test.ext:junit:1.1.5'
