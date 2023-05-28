@@ -6,38 +6,29 @@
     android:layout_height="match_parent"
     tools:context=".MainActivity">
 
-    <com.serenegiant.widget.AspectRatioSurfaceView
-        android:id="@+id/svCameraViewMain"
-        android:layout_width="960px"
-        android:layout_height="720px"
-        app:layout_constraintLeft_toLeftOf="parent"
-        app:layout_constraintRight_toRightOf="parent"
-        app:layout_constraintTop_toTopOf="parent"
-        app:layout_constraintBottom_toBottomOf="parent"/>
-
-    <RelativeLayout
+    <FrameLayout
+        android:id="@+id/cameraViewContainer"
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_alignBottom="@id/svCameraViewMain"
-        android:gravity="bottom"
+        android:layout_height="match_parent"
+        android:background="@color/black"
+        app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent">
 
-        <Button
-            android:id="@+id/btnOpenCamera"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginLeft="20dp"
-            android:text="open camera" />
+        <com.jiangdg.ausbc.widget.AspectRatioSurfaceView
+            android:id="@+id/cameraView"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent" />
+    </FrameLayout>
 
-        <Button
-            android:id="@+id/btnCloseCamera"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_alignParentRight="true"
-            android:layout_marginRight="20dp"
-            android:text="close camera" />
-    </RelativeLayout>
+    <Button
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="take photo??"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent"
+        android:id="@+id/takePhotoBtn"/>
+
 
 </androidx.constraintlayout.widget.ConstraintLayout>

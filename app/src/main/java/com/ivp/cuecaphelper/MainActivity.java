@@ -5,46 +5,42 @@ import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
 import android.hardware.usb.UsbDevice;
 import android.os.Bundle;
+import android.os.Environment;
 import android.util.Log;
+import android.view.LayoutInflater;
 import android.view.SurfaceHolder;
 import android.view.View;
+import android.view.ViewGroup;
 import android.widget.Button;
 import android.widget.ImageView;
 
 import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
-import androidx.core.app.ActivityCompat;
-import androidx.core.content.ContextCompat;
 
-import com.herohan.uvcapp.CameraHelper;
-import com.herohan.uvcapp.ICameraHelper;
-import com.herohan.uvcapp.utils.VideoUtil;
+
+import com.google.android.material.snackbar.Snackbar;
 import com.hjq.permissions.XXPermissions;
-import com.serenegiant.usb.Size;
-import com.serenegiant.usb.UVCCamera;
-import com.serenegiant.widget.AspectRatioSurfaceView;
+import com.jiangdg.ausbc.MultiCameraClient;
+import com.jiangdg.ausbc.base.CameraActivity;
+import com.jiangdg.ausbc.callback.ICaptureCallBack;
+import com.jiangdg.ausbc.camera.bean.CameraRequest;
+import com.jiangdg.ausbc.render.env.RotateType;
+import com.jiangdg.ausbc.widget.AspectRatioSurfaceView;
+import com.jiangdg.ausbc.widget.IAspectRatio;
+
 
 import java.util.ArrayList;
 import java.util.List;
 
-public class MainActivity extends AppCompatActivity implements View.OnClickListener {
+public class MainActivity extends CameraActivity implements View.OnClickListener {
 
-    //Developer debugging stuff that I will def use (who am I kidding I have to disconnect from logcat to connect the webcam_
-    private static final boolean DEBUG = true;
-    private static final String TAG = MainActivity.class.getSimpleName();
+    public View rootView;
 
-    //Webcam stuff lol (many thanks to the chinese man who wrote this library)
-    private ICameraHelper mCameraHelper;
-    private AspectRatioSurfaceView mCameraViewMain;
-
-    //Default width and height for webcam preview
-    private static final int DEFAULT_WIDTH = 640;
-    private static final int DEFAULT_HEIGHT = 480;
-
+    @Nullable
     @Override
-    protected void onCreate(Bundle savedInstanceState) {
-        super.onCreate(savedInstanceState);
-        setContentView(R.layout.activity_main);
+    protected View getRootView(@NonNull LayoutInflater layoutInflater) {
+        rootView = getLayoutInflater().inflate(R.layout.activity_main, null);
 
         //Request perms
         List<String> needPermissions = new ArrayList<>();
@@ -55,151 +51,74 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         XXPermissions.with(this)
                 .permission(needPermissions)
                 .request((permissions, allGranted) -> {
-            if(!allGranted) {
-                return;
-            }
-        });
+                    if (!allGranted) {
+                        return;
+                    }
+                });
 
-        initViews();
+
+        Button button = rootView.findViewById(R.id.takePhotoBtn);
+        button.setOnClickListener(this);
+
+        return rootView;
     }
 
+    @NonNull
+    @Override
+    public CameraRequest getCameraRequest() {
+        return new CameraRequest.Builder()
+                .setPreviewWidth(640)
+                .setPreviewHeight(480)
+                .setRenderMode(CameraRequest.RenderMode.NORMAL)
+                .setDefaultRotateType(RotateType.ANGLE_0)
+                .setAudioSource(CameraRequest.AudioSource.SOURCE_AUTO)
+                .setAspectRatioShow(true)
+                .setCaptureRawImage(true)
+                .setRawPreviewData(true)
+                .create();
+    }
 
-    private void initViews() {
-        mCameraViewMain = findViewById(R.id.svCameraViewMain);
-        mCameraViewMain.setAspectRatio(DEFAULT_WIDTH, DEFAULT_HEIGHT);
+    @Nullable
+    @Override
+    protected IAspectRatio getCameraView() {
+        return (AspectRatioSurfaceView) rootView.findViewById(R.id.cameraView);
+    }
 
-        mCameraViewMain.getHolder().addCallback(new SurfaceHolder.Callback() {
-            @Override
-            public void surfaceCreated(@NonNull SurfaceHolder holder) {
-                if (mCameraHelper != null) {
-                    mCameraHelper.addSurface(holder.getSurface(), false);
-                }
-            }
-
-            @Override
-            public void surfaceChanged(@NonNull SurfaceHolder holder, int format, int width, int height) {
-
-            }
-
-            @Override
-            public void surfaceDestroyed(@NonNull SurfaceHolder holder) {
-                if (mCameraHelper != null) {
-                    mCameraHelper.removeSurface(holder.getSurface());
-                }
-            }
-        });
-
-        Button btnOpenCamera = findViewById(R.id.btnOpenCamera);
-        btnOpenCamera.setOnClickListener(this);
-        Button btnCloseCamera = findViewById(R.id.btnCloseCamera);
-        btnCloseCamera.setOnClickListener(this);
+    @Nullable
+    @Override
+    protected ViewGroup getCameraViewContainer() {
+        return rootView.findViewById(R.id.cameraViewContainer);
     }
 
     @Override
-    protected void onStart() {
-        super.onStart();
-        initCameraHelper();
+    public void onCameraState(@NonNull MultiCameraClient.ICamera iCamera, @NonNull State state, @Nullable String s) {
+        switch (state) {
+            case OPENED:
+                Snackbar.make(rootView, "open", Snackbar.LENGTH_SHORT).show();
+            case CLOSED:
+                Snackbar.make(rootView, "close", Snackbar.LENGTH_SHORT).show();
+            case ERROR:
+                Snackbar.make(rootView, s, Snackbar.LENGTH_SHORT).show();
+        }
     }
 
     @Override
-    protected void onStop() {
-        super.onStop();
-        clearCameraHelper();
-    }
+    public void onClick(View view) {
+        captureImage(new ICaptureCallBack() {
+            @Override
+            public void onBegin() {
 
-    public void initCameraHelper() {
-        if (DEBUG) Log.d(TAG, "initCameraHelper:");
-        if (mCameraHelper == null) {
-            mCameraHelper = new CameraHelper();
-            mCameraHelper.setStateCallback(mStateListener);
-        }
-    }
-
-    private void clearCameraHelper() {
-        if (DEBUG) Log.d(TAG, "clearCameraHelper:");
-        if (mCameraHelper != null) {
-            mCameraHelper.release();
-            mCameraHelper = null;
-        }
-    }
-
-    private void selectDevice(final UsbDevice device) {
-        if (DEBUG) Log.v(TAG, "selectDevice:device=" + device.getDeviceName());
-        mCameraHelper.selectDevice(device);
-    }
-
-    private final ICameraHelper.StateCallback mStateListener = new ICameraHelper.StateCallback() {
-        @Override
-        public void onAttach(UsbDevice device) {
-            if (DEBUG) Log.v(TAG, "onAttach:");
-            selectDevice(device);
-        }
-
-        @Override
-        public void onDeviceOpen(UsbDevice device, boolean isFirstOpen) {
-            if (DEBUG) Log.v(TAG, "onDeviceOpen:");
-            mCameraHelper.openCamera();
-        }
-
-        @Override
-        public void onCameraOpen(UsbDevice device) {
-            if (DEBUG) Log.v(TAG, "onCameraOpen:");
-            mCameraHelper.startPreview();
-
-            Size size = mCameraHelper.getPreviewSize();
-            if (size != null) {
-                int width = size.width;
-                int height = size.height;
-                //auto aspect ratio
-                mCameraViewMain.setAspectRatio(width, height);
             }
 
-            mCameraHelper.addSurface(mCameraViewMain.getHolder().getSurface(), false);
-
-        }
-
-        @Override
-        public void onCameraClose(UsbDevice device) {
-            if (DEBUG) Log.v(TAG, "onCameraClose:");
-
-            if (mCameraHelper != null) {
-                mCameraHelper.removeSurface(mCameraViewMain.getHolder().getSurface());
+            @Override
+            public void onError(@Nullable String s) {
+                Snackbar.make(rootView, s, Snackbar.LENGTH_SHORT).show();
             }
-        }
 
-        @Override
-        public void onDeviceClose(UsbDevice device) {
-            if (DEBUG) Log.v(TAG, "onDeviceClose:");
-        }
+            @Override
+            public void onComplete(@Nullable String s) {
 
-        @Override
-        public void onDetach(UsbDevice device) {
-            if (DEBUG) Log.v(TAG, "onDetach:");
-        }
-
-        @Override
-        public void onCancel(UsbDevice device) {
-            if (DEBUG) Log.v(TAG, "onCancel:");
-        }
-
-    };
-
-    @Override
-    public void onClick(View v) {
-        if (v.getId() == R.id.btnOpenCamera) {
-            // select a uvc device
-            if (mCameraHelper != null) {
-                final List<UsbDevice> list = mCameraHelper.getDeviceList();
-                if (list != null && list.size() > 0) {
-                    mCameraHelper.selectDevice(list.get(0));
-                }
             }
-        } else if (v.getId() == R.id.btnCloseCamera) {
-            // close camera
-            if (mCameraHelper != null) {
-                mCameraHelper.closeCamera();
-            }
-        }
+        }, Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS).getAbsolutePath() + "/image.jpg");
     }
-
 }
