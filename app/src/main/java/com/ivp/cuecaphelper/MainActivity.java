@@ -25,6 +25,7 @@ import com.jiangdg.ausbc.MultiCameraClient;
 import com.jiangdg.ausbc.base.CameraActivity;
 import com.jiangdg.ausbc.callback.ICaptureCallBack;
 import com.jiangdg.ausbc.camera.bean.CameraRequest;
+import com.jiangdg.ausbc.camera.bean.PreviewSize;
 import com.jiangdg.ausbc.render.env.RotateType;
 import com.jiangdg.ausbc.widget.AspectRatioSurfaceView;
 import com.jiangdg.ausbc.widget.IAspectRatio;
@@ -67,8 +68,8 @@ public class MainActivity extends CameraActivity implements View.OnClickListener
     @Override
     public CameraRequest getCameraRequest() {
         return new CameraRequest.Builder()
-                .setPreviewWidth(640)
-                .setPreviewHeight(480)
+                .setPreviewWidth(1280)
+                .setPreviewHeight(720)
                 .setRenderMode(CameraRequest.RenderMode.NORMAL)
                 .setDefaultRotateType(RotateType.ANGLE_0)
                 .setAudioSource(CameraRequest.AudioSource.SOURCE_AUTO)
