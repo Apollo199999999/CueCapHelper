@@ -1,8 +1,6 @@
 pluginManagement {
     repositories {
         google()
-        maven { url 'https://maven.google.com' }
-        maven { url 'https://raw.github.com/saki4510t/libcommon/master/repository/' }
         mavenCentral()
         gradlePluginPortal()
     }
@@ -13,17 +11,7 @@ dependencyResolutionManagement {
         google()
         mavenCentral()
         maven { url 'https://jitpack.io' }
-        maven { url 'https://maven.google.com' }
-        maven { url 'https://raw.github.com/saki4510t/libcommon/master/repository/' }
     }
 }
-
-
 rootProject.name = "CueCapHelper"
 include ':app'
-include ':libuvccamera'
-include ':usbCameraCommon'
-project(':libuvccamera').projectDir = new File(rootDir, '/UVCCamera/libuvccamera/')
-project(':usbCameraCommon').projectDir = new File(rootDir, '/UVCCamera/usbCameraCommon/')
-
-
