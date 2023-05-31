@@ -1,49 +1,62 @@
 package com.ivp.cuecaphelper;
 
 import android.Manifest;
-import android.content.pm.PackageManager;
-import android.graphics.Bitmap;
+import android.graphics.SurfaceTexture;
 import android.hardware.usb.UsbDevice;
 import android.os.Bundle;
-import android.os.Environment;
-import android.util.Log;
-import android.view.LayoutInflater;
-import android.view.SurfaceHolder;
+import android.view.Surface;
 import android.view.View;
-import android.view.ViewGroup;
-import android.widget.Button;
-import android.widget.ImageView;
+import android.widget.ImageButton;
+import android.widget.Toast;
 
-import androidx.annotation.NonNull;
-import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
 
-
-import com.google.android.material.snackbar.Snackbar;
 import com.hjq.permissions.XXPermissions;
-import com.jiangdg.ausbc.MultiCameraClient;
-import com.jiangdg.ausbc.base.CameraActivity;
-import com.jiangdg.ausbc.callback.ICaptureCallBack;
-import com.jiangdg.ausbc.camera.bean.CameraRequest;
-import com.jiangdg.ausbc.camera.bean.PreviewSize;
-import com.jiangdg.ausbc.render.env.RotateType;
-import com.jiangdg.ausbc.widget.AspectRatioSurfaceView;
-import com.jiangdg.ausbc.widget.IAspectRatio;
-
+import com.serenegiant.common.BaseActivity;
+import com.serenegiant.widget.AspectRatioTextureView;
+import com.serenegiant.usb.CameraDialog;
+import com.serenegiant.usb.USBMonitor;
+import com.serenegiant.usbcameracommon.UVCCameraHandler;
+import com.serenegiant.widget.CameraViewInterface;
 
 import java.util.ArrayList;
 import java.util.List;
 
-public class MainActivity extends CameraActivity implements View.OnClickListener {
-
-    public View rootView;
-
-    @Nullable
+public class MainActivity extends BaseActivity  {
+    private CameraViewInterface mUVCCameraView;
+    private USBMonitor mUSBMonitor;
+    /**
+     * set true if you want to record movie using MediaSurfaceEncoder
+     * (writing frame data into Surface camera from MediaCodec
+     *  by almost same way as USBCameratest2)
+     * set false if you want to record movie using MediaVideoEncoder
+     */
+    private static final boolean USE_SURFACE_ENCODER = false;
+    /**
+     * preview resolution(width)
+     * if your camera does not support specific resolution and mode,
+     * UVCCamera#setPreviewSize(int, int, int) throw exception
+     */
+    private static final int PREVIEW_WIDTH = 960;
+    /**
+     * preview resolution(height)
+     * if your camera does not support specific resolution and mode,
+     * UVCCamera#setPreviewSize(int, int, int) throw exception
+     */
+    private static final int PREVIEW_HEIGHT = 720;
+    /**
+     * preview mode
+     * if your camera does not support specific resolution and mode,
+     * VCCamera#setPreviewSize(int, int, int) throw exception
+     * 0:YUYV, other:MJPEG
+     */
+    private static final int PREVIEW_MODE = 0; // YUV
+    private UVCCameraHandler mCameraHandler;
     @Override
-    protected View getRootView(@NonNull LayoutInflater layoutInflater) {
-        rootView = getLayoutInflater().inflate(R.layout.activity_main, null);
-
+    protected void onCreate(final Bundle savedInstanceState) {
         //Request perms
+        super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_main);
         List<String> needPermissions = new ArrayList<>();
         needPermissions.add(Manifest.permission.CAMERA);
         needPermissions.add(Manifest.permission.WRITE_EXTERNAL_STORAGE);
@@ -57,69 +70,70 @@ public class MainActivity extends CameraActivity implements View.OnClickListener
                     }
                 });
 
-
-        Button button = rootView.findViewById(R.id.takePhotoBtn);
-        button.setOnClickListener(this);
-
-        return rootView;
+        final View view = findViewById(R.id.camera_view);
+        mUVCCameraView = (CameraViewInterface) view;
+        mUVCCameraView.setAspectRatio(PREVIEW_WIDTH / (double)PREVIEW_HEIGHT);
+        mUSBMonitor = new USBMonitor(this, mOnDeviceConnectListener);
+        mCameraHandler = UVCCameraHandler.createHandler(this, mUVCCameraView,
+                USE_SURFACE_ENCODER ? 0 : 1, PREVIEW_WIDTH, PREVIEW_HEIGHT, PREVIEW_MODE);
     }
 
-    @NonNull
-    @Override
-    public CameraRequest getCameraRequest() {
-        return new CameraRequest.Builder()
-                .setPreviewWidth(1280)
-                .setPreviewHeight(720)
-                .setRenderMode(CameraRequest.RenderMode.NORMAL)
-                .setDefaultRotateType(RotateType.ANGLE_0)
-                .setAudioSource(CameraRequest.AudioSource.SOURCE_AUTO)
-                .setAspectRatioShow(true)
-                .setCaptureRawImage(true)
-                .setRawPreviewData(true)
-                .create();
-    }
+    private final USBMonitor.OnDeviceConnectListener mOnDeviceConnectListener = new USBMonitor.OnDeviceConnectListener() {
+        @Override
+        public void onAttach(final UsbDevice device) {
+            mUSBMonitor.requestPermission(device);
+            Toast.makeText(MainActivity.this, "USB_DEVICE_ATTACHED", Toast.LENGTH_SHORT).show();
+        }
 
-    @Nullable
-    @Override
-    protected IAspectRatio getCameraView() {
-        return (AspectRatioSurfaceView) rootView.findViewById(R.id.cameraView);
-    }
+        @Override
+        public void onConnect(final UsbDevice device, final USBMonitor.UsbControlBlock ctrlBlock, final boolean createNew) {
+            if (mCameraHandler != null) {
+                mCameraHandler.open(ctrlBlock);
+                startPreview();
+            }
+        }
 
-    @Nullable
-    @Override
-    protected ViewGroup getCameraViewContainer() {
-        return rootView.findViewById(R.id.cameraViewContainer);
-    }
+        @Override
+        public void onDisconnect(final UsbDevice device, final USBMonitor.UsbControlBlock ctrlBlock) {
 
-    @Override
-    public void onCameraState(@NonNull MultiCameraClient.ICamera iCamera, @NonNull State state, @Nullable String s) {
-        switch (state) {
-            case OPENED:
-                Snackbar.make(rootView, "open", Snackbar.LENGTH_SHORT).show();
-            case CLOSED:
-                Snackbar.make(rootView, "close", Snackbar.LENGTH_SHORT).show();
-            case ERROR:
-                Snackbar.make(rootView, s, Snackbar.LENGTH_SHORT).show();
+        }
+        @Override
+        public void onDettach(final UsbDevice device) {
+            Toast.makeText(MainActivity.this, "USB_DEVICE_DETACHED", Toast.LENGTH_SHORT).show();
+        }
+
+        @Override
+        public void onCancel(final UsbDevice device) {
+        }
+    };
+
+    private void startPreview() {
+        if (mCameraHandler != null) {
+            final SurfaceTexture st = mUVCCameraView.getSurfaceTexture();
+            mCameraHandler.startPreview(new Surface(st));
         }
     }
 
     @Override
-    public void onClick(View view) {
-        captureImage(new ICaptureCallBack() {
-            @Override
-            public void onBegin() {
-
-            }
-
-            @Override
-            public void onError(@Nullable String s) {
-                Snackbar.make(rootView, s, Snackbar.LENGTH_SHORT).show();
-            }
-
-            @Override
-            public void onComplete(@Nullable String s) {
-
-            }
-        }, Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS).getAbsolutePath() + "/image.jpg");
+    protected void onStart() {
+        super.onStart();
+        mUSBMonitor.register();
     }
+
+    @Override
+    protected void onStop() {
+        mUSBMonitor.unregister();
+        super.onStop();
+    }
+
+    @Override
+    public void onDestroy() {
+        if (mUSBMonitor != null) {
+            mUSBMonitor.destroy();
+            mUSBMonitor = null;
+        }
+        super.onDestroy();
+    }
+
+
 }
