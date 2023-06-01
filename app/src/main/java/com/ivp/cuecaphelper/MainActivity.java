@@ -31,6 +31,7 @@ import com.hjq.permissions.XXPermissions;
 import com.jiangdg.ausbc.MultiCameraClient;
 import com.jiangdg.ausbc.base.CameraActivity;
 import com.jiangdg.ausbc.callback.ICaptureCallBack;
+import com.jiangdg.ausbc.camera.CameraUVC;
 import com.jiangdg.ausbc.camera.bean.CameraRequest;
 import com.jiangdg.ausbc.camera.bean.PreviewSize;
 import com.jiangdg.ausbc.render.env.RotateType;
@@ -38,6 +39,7 @@ import com.jiangdg.ausbc.widget.AspectRatioSurfaceView;
 import com.jiangdg.ausbc.widget.IAspectRatio;
 
 
+import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Iterator;
@@ -51,7 +53,6 @@ public class MainActivity extends CameraActivity implements View.OnClickListener
     public View rootView;
     //Stores text to speech service
     public TextToSpeech tts;
-
 
     @Nullable
     @Override
@@ -84,6 +85,8 @@ public class MainActivity extends CameraActivity implements View.OnClickListener
         registerReceiver(mUsbAttachReceiver , filter);
         filter = new IntentFilter(UsbManager.ACTION_USB_DEVICE_DETACHED);
         registerReceiver(mUsbDetachReceiver , filter);
+
+
 
         Button button = rootView.findViewById(R.id.takePhotoBtn);
         button.setOnClickListener(this);

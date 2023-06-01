@@ -9,7 +9,8 @@ android {
     defaultConfig {
         applicationId "com.ivp.cuecaphelper"
         minSdk 24
-        targetSdk 33
+        //noinspection ExpiredTargetSdkVersion
+        targetSdk 27
         versionCode 1
         versionName "1.0"
 

@@ -26,7 +26,7 @@
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:theme="@style/Theme.CueCapHelper"
-        tools:targetApi="31">
+        tools:targetApi="27">
         <meta-data
             android:name="ScopedStorage"
             android:value="true" />
