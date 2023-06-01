@@ -7,6 +7,7 @@ import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
+import android.graphics.Camera;
 import android.hardware.usb.UsbDevice;
 import android.hardware.usb.UsbManager;
 import android.os.Bundle;
@@ -47,7 +48,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.logging.Logger;
 
-public class MainActivity extends CameraActivity implements View.OnClickListener {
+public class MainActivity extends CameraActivity {
 
     //Stores MainActivity view
     public View rootView;
@@ -86,11 +87,6 @@ public class MainActivity extends CameraActivity implements View.OnClickListener
         filter = new IntentFilter(UsbManager.ACTION_USB_DEVICE_DETACHED);
         registerReceiver(mUsbDetachReceiver , filter);
 
-
-
-        Button button = rootView.findViewById(R.id.takePhotoBtn);
-        button.setOnClickListener(this);
-
         return rootView;
     }
 
@@ -104,6 +100,7 @@ public class MainActivity extends CameraActivity implements View.OnClickListener
                 .setRenderMode(CameraRequest.RenderMode.NORMAL)
                 .setDefaultRotateType(RotateType.ANGLE_0)
                 .setAudioSource(CameraRequest.AudioSource.NONE)
+                .setPreviewFormat(CameraRequest.PreviewFormat.FORMAT_YUYV)
                 .setAspectRatioShow(true)
                 .setCaptureRawImage(true)
                 .setRawPreviewData(true)
@@ -124,35 +121,6 @@ public class MainActivity extends CameraActivity implements View.OnClickListener
 
     @Override
     public void onCameraState(@NonNull MultiCameraClient.ICamera iCamera, @NonNull State state, @Nullable String s) {}
-
-    @Override
-    public UsbDevice getDefaultCamera() {
-        return (UsbDevice)getIntent().getParcelableExtra(UsbManager.EXTRA_DEVICE);
-    }
-
-    @Override
-    public void onClick(View view) {
-        UsbManager manager = (UsbManager) getSystemService(Context.USB_SERVICE);
-        HashMap<String, UsbDevice> deviceList = manager.getDeviceList();
-        Iterator<UsbDevice> deviceIterator = deviceList.values().iterator();
-        while(deviceIterator.hasNext()){
-            UsbDevice device = deviceIterator.next();
-            Log.i("IVPUSB", Integer.toString(device.getProductId()));
-            Log.i("IVPUSB", Integer.toString(device.getVendorId()));
-        }
-//        captureImage(new ICaptureCallBack() {
-//            @Override
-//            public void onBegin() {}
-//
-//            @Override
-//            public void onError(@Nullable String s) {
-//                Snackbar.make(rootView, s, Snackbar.LENGTH_SHORT).show();
-//            }
-//
-//            @Override
-//            public void onComplete(@Nullable String s) {}
-//        }, Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS).getAbsolutePath() + "/image.jpg");
-    }
 
     BroadcastReceiver mUsbAttachReceiver = new BroadcastReceiver() {
         public void onReceive(Context context, Intent intent) {
