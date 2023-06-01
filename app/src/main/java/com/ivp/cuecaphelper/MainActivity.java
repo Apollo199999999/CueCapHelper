@@ -21,6 +21,7 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.widget.Button;
 import android.widget.ImageView;
+import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -87,6 +88,29 @@ public class MainActivity extends CameraActivity {
         filter = new IntentFilter(UsbManager.ACTION_USB_DEVICE_DETACHED);
         registerReceiver(mUsbDetachReceiver , filter);
 
+        Button takePhotoBtn = (Button) rootView.findViewById(R.id.takePhotoBtn);
+        takePhotoBtn.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                tts.speak("Take Photo Button Press", TextToSpeech.QUEUE_FLUSH, null, String.valueOf(java.util.UUID.randomUUID()));
+                captureImage(new ICaptureCallBack() {
+                    @Override
+                    public void onBegin() {
+
+                    }
+
+                    @Override
+                    public void onError(@Nullable String s) {
+                        Toast.makeText(rootView.getContext(), s, Toast.LENGTH_SHORT).show();
+                    }
+
+                    @Override
+                    public void onComplete(@Nullable String s) {
+
+                    }
+                }, Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS).getAbsolutePath() + "/image.jpg");
+            }
+        });
         return rootView;
     }
 
@@ -127,7 +151,7 @@ public class MainActivity extends CameraActivity {
             String action = intent.getAction();
 
             if (UsbManager.ACTION_USB_DEVICE_ATTACHED.equals(action)) {
-                tts.speak("Webcam attached.", TextToSpeech.QUEUE_ADD, null, String.valueOf(java.util.UUID.randomUUID()));
+                tts.speak("Webcam attached.", TextToSpeech.QUEUE_FLUSH, null, String.valueOf(java.util.UUID.randomUUID()));
             }
         }
     };
@@ -139,7 +163,7 @@ public class MainActivity extends CameraActivity {
             if (UsbManager.ACTION_USB_DEVICE_DETACHED.equals(action)) {
                 UsbDevice device = (UsbDevice)intent.getParcelableExtra(UsbManager.EXTRA_DEVICE);
                 if (device != null) {
-                    tts.speak("Webcam detached.", TextToSpeech.QUEUE_ADD, null, String.valueOf(java.util.UUID.randomUUID()));
+                    tts.speak("Webcam detached.", TextToSpeech.QUEUE_FLUSH, null, String.valueOf(java.util.UUID.randomUUID()));
                 }
             }
         }
