@@ -38,6 +38,7 @@ import com.jiangdg.ausbc.camera.bean.CameraRequest;
 import com.jiangdg.ausbc.camera.bean.PreviewSize;
 import com.jiangdg.ausbc.render.env.RotateType;
 import com.jiangdg.ausbc.widget.AspectRatioSurfaceView;
+import com.jiangdg.ausbc.widget.AspectRatioTextureView;
 import com.jiangdg.ausbc.widget.IAspectRatio;
 
 
@@ -47,15 +48,29 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Locale;
+import java.util.Timer;
+import java.util.TimerTask;
 import java.util.logging.Logger;
 
 public class MainActivity extends CameraActivity {
 
+    //region Global Variables
+
     //Stores MainActivity view
     public View rootView;
+
     //Stores text to speech service
     public TextToSpeech tts;
 
+    //Timer to get frames from webcam
+    private Timer framesTimer = new Timer();
+
+    //Interval in milliseconds on how often to get frames
+    private int frameInterval = 100;
+
+    //endregion
+
+    //region App Initialization
     @Nullable
     @Override
     protected View getRootView(@NonNull LayoutInflater layoutInflater) {
@@ -84,35 +99,17 @@ public class MainActivity extends CameraActivity {
 
         //Bind USB events
         IntentFilter filter = new IntentFilter(UsbManager.ACTION_USB_DEVICE_ATTACHED);
-        registerReceiver(mUsbAttachReceiver , filter);
+        registerReceiver(mUsbAttachReceiver, filter);
         filter = new IntentFilter(UsbManager.ACTION_USB_DEVICE_DETACHED);
-        registerReceiver(mUsbDetachReceiver , filter);
+        registerReceiver(mUsbDetachReceiver, filter);
 
-        Button takePhotoBtn = (Button) rootView.findViewById(R.id.takePhotoBtn);
-        takePhotoBtn.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View view) {
-                tts.speak("Take Photo Button Press", TextToSpeech.QUEUE_FLUSH, null, String.valueOf(java.util.UUID.randomUUID()));
-                captureImage(new ICaptureCallBack() {
-                    @Override
-                    public void onBegin() {
+        //Start frames timer
+        framesTimer.scheduleAtFixedRate(new GetFrames(), 0, frameInterval);
 
-                    }
-
-                    @Override
-                    public void onError(@Nullable String s) {
-                        Toast.makeText(rootView.getContext(), s, Toast.LENGTH_SHORT).show();
-                    }
-
-                    @Override
-                    public void onComplete(@Nullable String s) {
-
-                    }
-                }, Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS).getAbsolutePath() + "/image.jpg");
-            }
-        });
         return rootView;
     }
+
+    //endregion
 
     //region UVC Camera Event Handlers
     @NonNull
@@ -134,7 +131,7 @@ public class MainActivity extends CameraActivity {
     @Nullable
     @Override
     protected IAspectRatio getCameraView() {
-        return (AspectRatioSurfaceView) rootView.findViewById(R.id.cameraView);
+        return (AspectRatioTextureView) rootView.findViewById(R.id.cameraView);
     }
 
     @Nullable
@@ -144,7 +141,8 @@ public class MainActivity extends CameraActivity {
     }
 
     @Override
-    public void onCameraState(@NonNull MultiCameraClient.ICamera iCamera, @NonNull State state, @Nullable String s) {}
+    public void onCameraState(@NonNull MultiCameraClient.ICamera iCamera, @NonNull State state, @Nullable String s) {
+    }
 
     BroadcastReceiver mUsbAttachReceiver = new BroadcastReceiver() {
         public void onReceive(Context context, Intent intent) {
@@ -161,20 +159,49 @@ public class MainActivity extends CameraActivity {
             String action = intent.getAction();
 
             if (UsbManager.ACTION_USB_DEVICE_DETACHED.equals(action)) {
-                UsbDevice device = (UsbDevice)intent.getParcelableExtra(UsbManager.EXTRA_DEVICE);
+                UsbDevice device = (UsbDevice) intent.getParcelableExtra(UsbManager.EXTRA_DEVICE);
                 if (device != null) {
                     tts.speak("Webcam detached.", TextToSpeech.QUEUE_FLUSH, null, String.valueOf(java.util.UUID.randomUUID()));
                 }
             }
         }
     };
+
     @Override
     public void onDestroy() {
         unregisterReceiver(mUsbDetachReceiver);
         unregisterReceiver(mUsbAttachReceiver);
+
+        //Kill the framesTimer if running
+        framesTimer.cancel();
+        framesTimer.purge();
+
         super.onDestroy();
     }
 
     //endregion
 
+    //region OpenCV shit
+    private class GetFrames extends TimerTask {
+        //This thing's a goddamn mess
+        @Override
+        public void run() {
+            if (isCameraOpened()) {
+                runOnUiThread(new Runnable() {
+                    @Override
+                    public void run() {
+                        //Get bitmaps from the webcam and display it in the imageView
+                        AspectRatioTextureView aspectRatioTextureView =
+                                (AspectRatioTextureView) rootView.findViewById(R.id.cameraView);
+                        Bitmap frame = aspectRatioTextureView.getBitmap();
+
+                        ImageView framesImageView = (ImageView) rootView.findViewById(R.id.framesView);
+                        framesImageView.setImageBitmap(frame);
+                    }
+                });
+
+            }
+        }
+    }
+    //endregion
 }
