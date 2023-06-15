@@ -135,6 +135,7 @@ public class MainActivity extends CameraActivity {
                         .setPerformanceMode(FaceDetectorOptions.PERFORMANCE_MODE_FAST)
                         .setLandmarkMode(FaceDetectorOptions.LANDMARK_MODE_NONE)
                         .setClassificationMode(FaceDetectorOptions.CLASSIFICATION_MODE_NONE)
+                        .setMinFaceSize(0.4f)
                         .build();
         faceDetector = FaceDetection.getClient(faceDetectorOptions);
 
@@ -235,7 +236,15 @@ public class MainActivity extends CameraActivity {
                         GetEmotion();
                     }
                 });
-
+            }
+            else {
+                runOnUiThread(new Runnable() {
+                    @Override
+                    public void run() {
+                        ImageView framesImageView = (ImageView) rootView.findViewById(R.id.framesView);
+                        framesImageView.setImageBitmap(null);
+                    }
+                });
             }
         }
     }
@@ -321,7 +330,7 @@ public class MainActivity extends CameraActivity {
 
                                             //Get the associated emotion
                                             String emotion = emotionLabels.get(maxIndex);
-                                            String outputEmotionLabel = String.format("%s %.2f", emotion, maxProbability * 100);
+                                            String outputEmotionLabel = String.format("%s %.2f", emotion, maxProbability * 100) + "%";
 
                                             // Releases model resources if no longer used.
                                             model.close();
@@ -338,7 +347,7 @@ public class MainActivity extends CameraActivity {
                                             //Write the emotion
                                             Paint textPaint = new Paint();
                                             textPaint.setColor(Color.rgb(50, 205, 50));
-                                            textPaint.setTextSize(14);
+                                            textPaint.setTextSize(18f);
                                             canvas.drawText(outputEmotionLabel, bounds.left, bounds.top - 20, textPaint);
 
                                             framesImageView.setImageBitmap(frameMutable);
