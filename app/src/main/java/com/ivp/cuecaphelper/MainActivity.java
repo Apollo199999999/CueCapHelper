@@ -5,14 +5,18 @@ import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
+import android.content.res.AssetFileDescriptor;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
 import android.graphics.Color;
+import android.graphics.ColorMatrix;
+import android.graphics.ColorMatrixColorFilter;
 import android.graphics.Paint;
 import android.graphics.Rect;
 import android.hardware.usb.UsbDevice;
 import android.hardware.usb.UsbManager;
 import android.speech.tts.TextToSpeech;
+import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -30,6 +34,7 @@ import com.google.mlkit.vision.face.FaceDetection;
 import com.google.mlkit.vision.face.FaceDetector;
 import com.google.mlkit.vision.face.FaceDetectorOptions;
 import com.hjq.permissions.XXPermissions;
+import com.ivp.cuecaphelper.ml.FerModel;
 import com.jiangdg.ausbc.MultiCameraClient;
 import com.jiangdg.ausbc.base.CameraActivity;
 import com.jiangdg.ausbc.camera.bean.CameraRequest;
@@ -37,7 +42,24 @@ import com.jiangdg.ausbc.render.env.RotateType;
 import com.jiangdg.ausbc.widget.AspectRatioTextureView;
 import com.jiangdg.ausbc.widget.IAspectRatio;
 
+import org.tensorflow.lite.DataType;
+import org.tensorflow.lite.InterpreterApi;
+import org.tensorflow.lite.InterpreterFactory;
+import org.tensorflow.lite.support.common.FileUtil;
+import org.tensorflow.lite.support.common.ops.NormalizeOp;
+import org.tensorflow.lite.support.image.ImageProcessor;
+import org.tensorflow.lite.support.image.TensorImage;
+import org.tensorflow.lite.support.image.ops.ResizeOp;
+import org.tensorflow.lite.support.image.ops.TransformToGrayscaleOp;
+import org.tensorflow.lite.support.tensorbuffer.TensorBuffer;
+
+import java.io.FileInputStream;
+import java.io.IOException;
+import java.nio.MappedByteBuffer;
+import java.nio.channels.FileChannel;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
 import java.util.Timer;
@@ -54,13 +76,29 @@ public class MainActivity extends CameraActivity {
     public TextToSpeech tts;
 
     //Timer to get frames from webcam
-    private Timer framesTimer = new Timer();
+    public Timer framesTimer = new Timer();
 
     //Interval in milliseconds on how often to get frames
-    private int frameInterval = 100;
+    public int frameInterval = 100;
 
     //FaceDetector object from MLKit
-    FaceDetector faceDetector;
+    public FaceDetector faceDetector;
+
+    //Stores emotion labels
+    public List<String> emotionLabels = Arrays.asList
+            ("angry", "disgust", "fear", "happy", "sad", "surprise", "neutral");
+
+    //Tensorflow image processor
+    public ImageProcessor tfImageProcessor =
+            new ImageProcessor.Builder()
+                    .add(new ResizeOp(48, 48, ResizeOp.ResizeMethod.BILINEAR))
+                    .add(new TransformToGrayscaleOp())
+                    .add(new NormalizeOp(0f, 255f))
+                    .build();
+
+    // Create a TensorImage object. This creates the tensor of the corresponding
+    // tensor type (uint8 in this case) that the TensorFlow Lite interpreter needs.
+    public TensorImage tensorImage = new TensorImage(DataType.FLOAT32);
 
     //endregion
 
@@ -119,7 +157,7 @@ public class MainActivity extends CameraActivity {
     @Override
     public CameraRequest getCameraRequest() {
         return new CameraRequest.Builder()
-                .setPreviewWidth(490)
+                .setPreviewWidth(485)
                 .setPreviewHeight(360)
                 .setRenderMode(CameraRequest.RenderMode.NORMAL)
                 .setDefaultRotateType(RotateType.ANGLE_0)
@@ -194,58 +232,140 @@ public class MainActivity extends CameraActivity {
                 runOnUiThread(new Runnable() {
                     @Override
                     public void run() {
-                        //Get bitmaps from the webcam display
-                        AspectRatioTextureView aspectRatioTextureView =
-                                (AspectRatioTextureView) rootView.findViewById(R.id.cameraView);
-                        ImageView framesImageView = (ImageView) rootView.findViewById(R.id.framesView);
-
-                        Bitmap frame = aspectRatioTextureView.getBitmap();
-
-                        //Put bitmap in face detector
-                        InputImage image = InputImage.fromBitmap(frame, 0);
-
-                        Task<List<Face>> result =
-                                faceDetector.process(image)
-                                        .addOnSuccessListener(
-                                                new OnSuccessListener<List<Face>>() {
-                                                    @Override
-                                                    public void onSuccess(List<Face> faces) {
-                                                        if (faces.size() > 0) {
-                                                            for (Face face : faces) {
-                                                                Rect bounds = face.getBoundingBox();
-
-                                                                //Draw the bounding rectangle
-                                                                Bitmap frameMutable = frame.copy(Bitmap.Config.ARGB_8888, true);
-                                                                Canvas canvas = new Canvas(frameMutable);
-                                                                Paint myPaint = new Paint();
-                                                                myPaint.setColor(Color.rgb(0, 0, 0));
-                                                                myPaint.setStrokeWidth(10);
-                                                                myPaint.setStyle(Paint.Style.STROKE);
-                                                                canvas.drawRect(bounds.left, bounds.top, bounds.right, bounds.bottom, myPaint);
-
-                                                                framesImageView.setImageBitmap(frameMutable);
-                                                            }
-                                                        }
-                                                        else {
-                                                            //Just set the unmodified frame bitmap
-                                                            framesImageView.setImageBitmap(frame);
-                                                        }
-                                                    }
-                                                })
-                                        .addOnFailureListener(
-                                                new OnFailureListener() {
-                                                    @Override
-                                                    public void onFailure(@NonNull Exception e) {
-                                                        //Just set the unmodified frame bitmap
-                                                        framesImageView.setImageBitmap(frame);
-                                                    }
-                                                });
+                        GetEmotion();
                     }
                 });
 
             }
         }
     }
+
+    public void GetEmotion() {
+        //Get bitmaps from the webcam display
+        AspectRatioTextureView aspectRatioTextureView =
+                (AspectRatioTextureView) rootView.findViewById(R.id.cameraView);
+        ImageView framesImageView = (ImageView) rootView.findViewById(R.id.framesView);
+
+        Bitmap frame = aspectRatioTextureView.getBitmap();
+
+        //Put bitmap in face detector
+        InputImage image = InputImage.fromBitmap(frame, 0);
+
+        Task<List<Face>> result = faceDetector.process(image)
+                .addOnSuccessListener(
+                        new OnSuccessListener<List<Face>>() {
+                            @Override
+                            public void onSuccess(List<Face> faces) {
+                                if (faces.size() > 0) {
+                                    for (Face face : faces) {
+                                        Rect bounds = face.getBoundingBox();
+
+                                        //God forgive me for this cursed code I am about to do
+                                        //This is supposed to wrap the dimensions of the face cropping if it exceeds the width and height of the bitmap
+                                        int faceX = bounds.left;
+                                        int faceY = bounds.top;
+                                        int faceWidth = 0;
+                                        int faceHeight = 0;
+
+                                        if (faceX <= 0) {
+                                            faceWidth = Math.min(485, bounds.right);
+                                            faceX = 0;
+                                        } else if (faceX > 0) {
+                                            faceWidth = Math.min(bounds.width(), 485 - bounds.left);
+                                        }
+
+                                        if (faceY <= 0) {
+                                            faceHeight = Math.min(360, bounds.bottom);
+                                            faceY = 0;
+                                        } else if (faceY > 0) {
+                                            faceHeight = Math.min(bounds.height(), 360 - bounds.top);
+                                        }
+
+                                        //Crop the face from the frame bitmap using the rect
+                                        Bitmap faceImage = Bitmap.createBitmap(frame,
+                                                faceX,
+                                                faceY,
+                                                faceWidth,
+                                                faceHeight);
+
+                                        //Process the face image using tensorflow
+                                        tensorImage.load(faceImage);
+                                        tensorImage = tfImageProcessor.process(tensorImage);
+
+                                        try {
+                                            FerModel model = FerModel.newInstance(rootView.getContext());
+
+                                            // Creates inputs for reference.
+                                            TensorBuffer inputFeature0 = TensorBuffer.createFixedSize(new int[]{1, 48, 48, 1}, DataType.FLOAT32);
+                                            inputFeature0.loadBuffer(tensorImage.getBuffer());
+
+                                            // Runs model inference and gets result.
+                                            FerModel.Outputs outputs = model.process(inputFeature0);
+                                            TensorBuffer outputFeature0 = outputs.getOutputFeature0AsTensorBuffer();
+
+                                            //Get the probability bufffer from the output
+                                            float[] emotionsProbability = outputFeature0.getFloatArray();
+
+                                            //Get the most likely emotion
+                                            //Initialize max with first element of array.
+                                            float maxProbability = emotionsProbability[0];
+                                            int maxIndex = 0;
+                                            //Loop through the array
+                                            for (int i = 0; i < emotionsProbability.length; i++) {
+                                                //Compare elements of array with max
+                                                if (emotionsProbability[i] > maxProbability) {
+                                                    maxProbability = emotionsProbability[i];
+                                                    maxIndex = i;
+                                                }
+                                            }
+
+                                            //Get the associated emotion
+                                            String emotion = emotionLabels.get(maxIndex);
+                                            String outputEmotionLabel = String.format("%s %.2f", emotion, maxProbability * 100);
+
+                                            // Releases model resources if no longer used.
+                                            model.close();
+
+                                            //Draw the bounding rectangle
+                                            Bitmap frameMutable = frame.copy(Bitmap.Config.ARGB_8888, true);
+                                            Canvas canvas = new Canvas(frameMutable);
+                                            Paint borderPaint = new Paint();
+                                            borderPaint.setColor(Color.rgb(50, 205, 50));
+                                            borderPaint.setStrokeWidth(5);
+                                            borderPaint.setStyle(Paint.Style.STROKE);
+                                            canvas.drawRect(bounds.left, bounds.top, bounds.right, bounds.bottom, borderPaint);
+
+                                            //Write the emotion
+                                            Paint textPaint = new Paint();
+                                            textPaint.setColor(Color.rgb(50, 205, 50));
+                                            textPaint.setTextSize(14);
+                                            canvas.drawText(outputEmotionLabel, bounds.left, bounds.top - 20, textPaint);
+
+                                            framesImageView.setImageBitmap(frameMutable);
+
+                                        } catch (IOException e) {
+                                            // die lol (just draw the unmodified frame bitmap)
+                                            framesImageView.setImageBitmap(frame);
+                                        }
+
+
+                                    }
+                                } else {
+                                    //Just set the unmodified frame bitmap
+                                    framesImageView.setImageBitmap(frame);
+                                }
+                            }
+                        })
+                .addOnFailureListener(
+                        new OnFailureListener() {
+                            @Override
+                            public void onFailure(@NonNull Exception e) {
+                                //Just set the unmodified frame bitmap
+                                framesImageView.setImageBitmap(frame);
+                            }
+                        });
+    }
+
 
     //endregion
 }

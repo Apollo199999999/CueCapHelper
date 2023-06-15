@@ -21,7 +21,7 @@
 
         <FrameLayout
             android:id="@+id/cameraViewContainer"
-            android:layout_width="480px"
+            android:layout_width="485px"
             android:layout_height="360px"
             android:layout_weight="0"
             android:background="@color/black"
