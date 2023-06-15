@@ -5,18 +5,14 @@ import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
-import android.content.res.AssetFileDescriptor;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
 import android.graphics.Color;
-import android.graphics.ColorMatrix;
-import android.graphics.ColorMatrixColorFilter;
 import android.graphics.Paint;
 import android.graphics.Rect;
 import android.hardware.usb.UsbDevice;
 import android.hardware.usb.UsbManager;
 import android.speech.tts.TextToSpeech;
-import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -43,9 +39,6 @@ import com.jiangdg.ausbc.widget.AspectRatioTextureView;
 import com.jiangdg.ausbc.widget.IAspectRatio;
 
 import org.tensorflow.lite.DataType;
-import org.tensorflow.lite.InterpreterApi;
-import org.tensorflow.lite.InterpreterFactory;
-import org.tensorflow.lite.support.common.FileUtil;
 import org.tensorflow.lite.support.common.ops.NormalizeOp;
 import org.tensorflow.lite.support.image.ImageProcessor;
 import org.tensorflow.lite.support.image.TensorImage;
@@ -53,15 +46,12 @@ import org.tensorflow.lite.support.image.ops.ResizeOp;
 import org.tensorflow.lite.support.image.ops.TransformToGrayscaleOp;
 import org.tensorflow.lite.support.tensorbuffer.TensorBuffer;
 
-import java.io.FileInputStream;
 import java.io.IOException;
-import java.nio.MappedByteBuffer;
-import java.nio.channels.FileChannel;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
+import java.util.Objects;
 import java.util.Timer;
 import java.util.TimerTask;
 
@@ -79,7 +69,8 @@ public class MainActivity extends CameraActivity {
     public Timer framesTimer = new Timer();
 
     //Interval in milliseconds on how often to get frames
-    public int frameInterval = 100;
+    //Limited to twice a second to prevent tts from going crazy
+    public int frameInterval = 500;
 
     //FaceDetector object from MLKit
     public FaceDetector faceDetector;
@@ -99,6 +90,9 @@ public class MainActivity extends CameraActivity {
     // Create a TensorImage object. This creates the tensor of the corresponding
     // tensor type (uint8 in this case) that the TensorFlow Lite interpreter needs.
     public TensorImage tensorImage = new TensorImage(DataType.FLOAT32);
+
+    //Stores the previous detected emotion, used to determine whether to tts the current emotion
+    public String prevEmotion = "";
 
     //endregion
 
@@ -153,7 +147,7 @@ public class MainActivity extends CameraActivity {
 
     //endregion
 
-    //region UVC Camera Event Handlers
+    //region UVC Camera/USB Event Handlers
     @NonNull
     @Override
     public CameraRequest getCameraRequest() {
@@ -312,7 +306,7 @@ public class MainActivity extends CameraActivity {
                                             FerModel.Outputs outputs = model.process(inputFeature0);
                                             TensorBuffer outputFeature0 = outputs.getOutputFeature0AsTensorBuffer();
 
-                                            //Get the probability bufffer from the output
+                                            //Get the probability buffer from the output
                                             float[] emotionsProbability = outputFeature0.getFloatArray();
 
                                             //Get the most likely emotion
@@ -351,6 +345,12 @@ public class MainActivity extends CameraActivity {
                                             canvas.drawText(outputEmotionLabel, bounds.left, bounds.top - 20, textPaint);
 
                                             framesImageView.setImageBitmap(frameMutable);
+
+                                            //Determine whether to read the emotion using tts
+                                            if (!Objects.equals(emotion, prevEmotion)) {
+                                                tts.speak(emotion, TextToSpeech.QUEUE_FLUSH, null, String.valueOf(java.util.UUID.randomUUID()));
+                                                prevEmotion = emotion;
+                                            }
 
                                         } catch (IOException e) {
                                             // die lol (just draw the unmodified frame bitmap)
