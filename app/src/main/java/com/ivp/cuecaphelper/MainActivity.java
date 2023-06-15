@@ -49,9 +49,12 @@ import org.tensorflow.lite.support.tensorbuffer.TensorBuffer;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Iterator;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
+import java.util.Queue;
 import java.util.Timer;
 import java.util.TimerTask;
 
@@ -70,7 +73,7 @@ public class MainActivity extends CameraActivity {
 
     //Interval in milliseconds on how often to get frames
     //Limited to twice a second to prevent tts from going crazy
-    public int frameInterval = 500;
+    public int frameInterval = 100;
 
     //FaceDetector object from MLKit
     public FaceDetector faceDetector;
@@ -88,11 +91,14 @@ public class MainActivity extends CameraActivity {
                     .build();
 
     // Create a TensorImage object. This creates the tensor of the corresponding
-    // tensor type (uint8 in this case) that the TensorFlow Lite interpreter needs.
+    // tensor type (float32 in this case) that the TensorFlow Lite interpreter needs.
     public TensorImage tensorImage = new TensorImage(DataType.FLOAT32);
 
-    //Stores the previous detected emotion, used to determine whether to tts the current emotion
-    public String prevEmotion = "";
+    //Stores the previous 3 detected emotions, used to determine whether to tts the current emotion
+    public Queue<String> prevEmotions = new LinkedList<>();
+
+    //Stores the last spoken emotion, also used to determine whether to tts the current emotion
+    public String lastSpokenEmotion = "";
 
     //endregion
 
@@ -347,16 +353,33 @@ public class MainActivity extends CameraActivity {
                                             framesImageView.setImageBitmap(frameMutable);
 
                                             //Determine whether to read the emotion using tts
-                                            if (!Objects.equals(emotion, prevEmotion)) {
+                                            if (prevEmotions.size() >= 4) {
+                                                prevEmotions.remove();
+                                            }
+                                            prevEmotions.add(emotion);
+
+                                            //Only tts the emotion if the prev 3 emotions in the queue are equal
+                                            //This is to prevent the tts from going crazy, as the ML model
+                                            //usually quickly flickers through multiple emotions
+                                            //when the target changes expression
+                                            boolean assertPrevEmotionsEqual = true;
+                                            Iterator iterator = prevEmotions.iterator();
+                                            while (iterator.hasNext()) {
+                                                if (!Objects.equals(emotion, iterator.next())){
+                                                    assertPrevEmotionsEqual = false;
+                                                }
+                                            }
+
+                                            if (assertPrevEmotionsEqual && !Objects.equals(emotion, lastSpokenEmotion)) {
+                                                //tts the emotion
                                                 tts.speak(emotion, TextToSpeech.QUEUE_FLUSH, null, String.valueOf(java.util.UUID.randomUUID()));
-                                                prevEmotion = emotion;
+                                                lastSpokenEmotion = emotion;
                                             }
 
                                         } catch (IOException e) {
                                             // die lol (just draw the unmodified frame bitmap)
                                             framesImageView.setImageBitmap(frame);
                                         }
-
 
                                     }
                                 } else {
