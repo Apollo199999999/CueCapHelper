@@ -221,7 +221,7 @@ public class MainActivity extends CameraActivity {
         super.onDestroy();
     }
 
-    //endregion%%%
+    //endregion
 
     //region Face detection/Tensorflow shit (god save me I'm gonna kill Caden after this)
 
