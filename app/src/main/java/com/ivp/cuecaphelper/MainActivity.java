@@ -49,6 +49,7 @@ import org.tensorflow.lite.support.tensorbuffer.TensorBuffer;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Hashtable;
 import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
@@ -94,11 +95,10 @@ public class MainActivity extends CameraActivity {
     // tensor type (float32 in this case) that the TensorFlow Lite interpreter needs.
     public TensorImage tensorImage = new TensorImage(DataType.FLOAT32);
 
-    //Stores the previous 3 detected emotions, used to determine whether to tts the current emotion
-    public Queue<String> prevEmotions = new LinkedList<>();
-
-    //Stores the last spoken emotion, also used to determine whether to tts the current emotion
-    public String lastSpokenEmotion = "";
+    //Stores the previous 3 detected emotions with the key being the face id,
+    // used to determine whether to tts the current emotion
+    public Hashtable<Integer, Queue<String>> prevEmotions = new Hashtable<Integer, Queue<String>>();
+    public Hashtable<Integer, String> lastSpokenEmotions = new Hashtable<Integer, String>();
 
     //endregion
 
@@ -136,6 +136,7 @@ public class MainActivity extends CameraActivity {
                         .setLandmarkMode(FaceDetectorOptions.LANDMARK_MODE_NONE)
                         .setClassificationMode(FaceDetectorOptions.CLASSIFICATION_MODE_NONE)
                         .setMinFaceSize(0.4f)
+                        .enableTracking()
                         .build();
         faceDetector = FaceDetection.getClient(faceDetectorOptions);
 
@@ -352,28 +353,42 @@ public class MainActivity extends CameraActivity {
 
                                             framesImageView.setImageBitmap(frameMutable);
 
-                                            //Determine whether to read the emotion using tts
-                                            if (prevEmotions.size() >= 4) {
-                                                prevEmotions.remove();
+                                            //Get the id of the detected face
+                                            int faceTrackingId = face.getTrackingId();
+
+                                            if (!prevEmotions.containsKey(faceTrackingId) || !lastSpokenEmotions.containsKey(faceTrackingId)) {
+                                                //Create a new key value pair in the hashtables
+                                                prevEmotions.put(faceTrackingId, new LinkedList<>());
+                                                lastSpokenEmotions.put(faceTrackingId, "");
                                             }
-                                            prevEmotions.add(emotion);
+
+                                            //Find the queue associated with the face ID
+                                            Queue<String> prevEmotionsIndv = prevEmotions.get(faceTrackingId);
+
+                                            //Determine whether to read the emotion using tts
+                                            if (prevEmotionsIndv.size() >= 4) {
+                                                prevEmotionsIndv.remove();
+                                            }
+
+                                            prevEmotionsIndv.add(emotion);
+                                            prevEmotions.put(faceTrackingId, prevEmotionsIndv);
 
                                             //Only tts the emotion if the prev 3 emotions in the queue are equal
                                             //This is to prevent the tts from going crazy, as the ML model
                                             //usually quickly flickers through multiple emotions
                                             //when the target changes expression
                                             boolean assertPrevEmotionsEqual = true;
-                                            Iterator iterator = prevEmotions.iterator();
+                                            Iterator iterator = prevEmotionsIndv.iterator();
                                             while (iterator.hasNext()) {
                                                 if (!Objects.equals(emotion, iterator.next())){
                                                     assertPrevEmotionsEqual = false;
                                                 }
                                             }
 
-                                            if (assertPrevEmotionsEqual && !Objects.equals(emotion, lastSpokenEmotion)) {
+                                            if (assertPrevEmotionsEqual && !Objects.equals(emotion, lastSpokenEmotions.get(faceTrackingId))) {
                                                 //tts the emotion
                                                 tts.speak(emotion, TextToSpeech.QUEUE_FLUSH, null, String.valueOf(java.util.UUID.randomUUID()));
-                                                lastSpokenEmotion = emotion;
+                                                lastSpokenEmotions.put(faceTrackingId, emotion);
                                             }
 
                                         } catch (IOException e) {
