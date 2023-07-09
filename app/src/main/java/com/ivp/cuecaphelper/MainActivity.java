@@ -13,6 +13,7 @@ import android.graphics.Rect;
 import android.hardware.usb.UsbDevice;
 import android.hardware.usb.UsbManager;
 import android.speech.tts.TextToSpeech;
+import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -237,8 +238,7 @@ public class MainActivity extends CameraActivity {
                         GetEmotion();
                     }
                 });
-            }
-            else {
+            } else {
                 runOnUiThread(new Runnable() {
                     @Override
                     public void run() {
@@ -279,17 +279,22 @@ public class MainActivity extends CameraActivity {
 
                                         if (faceX <= 0) {
                                             faceWidth = Math.min(485, bounds.right);
-                                            faceX = 1;
+                                            faceX = 0;
                                         } else if (faceX > 0) {
                                             faceWidth = Math.min(bounds.width(), 485 - bounds.left);
                                         }
 
                                         if (faceY <= 0) {
                                             faceHeight = Math.min(360, bounds.bottom);
-                                            faceY = 1;
+                                            faceY = 0;
                                         } else if (faceY > 0) {
                                             faceHeight = Math.min(bounds.height(), 360 - bounds.top);
                                         }
+
+//                                        Log.d("face cropping", Integer.toString(faceX) + " "
+//                                                + Integer.toString(faceY) + " "
+//                                                + Integer.toString(faceWidth) + " "
+//                                                + Integer.toString(faceHeight));
 
                                         //Crop the face from the frame bitmap using the rect
                                         Bitmap faceImage = Bitmap.createBitmap(frame,
@@ -380,7 +385,7 @@ public class MainActivity extends CameraActivity {
                                             boolean assertPrevEmotionsEqual = true;
                                             Iterator iterator = prevEmotionsIndv.iterator();
                                             while (iterator.hasNext()) {
-                                                if (!Objects.equals(emotion, iterator.next())){
+                                                if (!Objects.equals(emotion, iterator.next())) {
                                                     assertPrevEmotionsEqual = false;
                                                 }
                                             }
