@@ -291,6 +291,14 @@ public class MainActivity extends CameraActivity {
                                             faceHeight = Math.min(bounds.height(), 360 - bounds.top);
                                         }
 
+                                        //Set the faceWidth and faceHeight to be at least 1
+                                        faceWidth = Math.max(1, faceWidth);
+                                        faceHeight = Math.max(1, faceHeight);
+
+                                        //Set the faceX to be no more than width, faceY to be no more than height
+                                        faceX = Math.min(faceX, 484);
+                                        faceY = Math.min(faceY, 359);
+
 //                                        Log.d("face cropping", Integer.toString(faceX) + " "
 //                                                + Integer.toString(faceY) + " "
 //                                                + Integer.toString(faceWidth) + " "
