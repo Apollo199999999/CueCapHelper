@@ -81,7 +81,7 @@ public class MainActivity extends CameraActivity {
 
     //Stores emotion labels
     public List<String> emotionLabels = Arrays.asList
-            ("angry", "disgust", "fear", "happy", "sad", "surprise", "neutral");
+            ("anger", "happiness", "neutral", "sadness", "surprise-or-fear");
 
     //Tensorflow image processor
     public ImageProcessor tfImageProcessor =
@@ -279,14 +279,14 @@ public class MainActivity extends CameraActivity {
 
                                         if (faceX <= 0) {
                                             faceWidth = Math.min(485, bounds.right);
-                                            faceX = 0;
+                                            faceX = 1;
                                         } else if (faceX > 0) {
                                             faceWidth = Math.min(bounds.width(), 485 - bounds.left);
                                         }
 
                                         if (faceY <= 0) {
                                             faceHeight = Math.min(360, bounds.bottom);
-                                            faceY = 0;
+                                            faceY = 1;
                                         } else if (faceY > 0) {
                                             faceHeight = Math.min(bounds.height(), 360 - bounds.top);
                                         }
