@@ -6,10 +6,15 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
 import android.graphics.Canvas;
 import android.graphics.Color;
+import android.graphics.ColorMatrix;
+import android.graphics.ColorMatrixColorFilter;
+import android.graphics.ImageFormat;
 import android.graphics.Paint;
 import android.graphics.Rect;
+import android.graphics.YuvImage;
 import android.hardware.usb.UsbDevice;
 import android.hardware.usb.UsbManager;
 import android.speech.tts.TextToSpeech;
@@ -34,19 +39,25 @@ import com.hjq.permissions.XXPermissions;
 import com.ivp.cuecaphelper.ml.FerModel;
 import com.jiangdg.ausbc.MultiCameraClient;
 import com.jiangdg.ausbc.base.CameraActivity;
+import com.jiangdg.ausbc.callback.IPreviewDataCallBack;
 import com.jiangdg.ausbc.camera.bean.CameraRequest;
 import com.jiangdg.ausbc.render.env.RotateType;
 import com.jiangdg.ausbc.widget.AspectRatioTextureView;
 import com.jiangdg.ausbc.widget.IAspectRatio;
 
 import org.tensorflow.lite.DataType;
+import org.tensorflow.lite.Interpreter;
+import org.tensorflow.lite.InterpreterApi;
+import org.tensorflow.lite.gpu.CompatibilityList;
+import org.tensorflow.lite.gpu.GpuDelegate;
 import org.tensorflow.lite.support.common.ops.NormalizeOp;
 import org.tensorflow.lite.support.image.ImageProcessor;
 import org.tensorflow.lite.support.image.TensorImage;
 import org.tensorflow.lite.support.image.ops.ResizeOp;
-import org.tensorflow.lite.support.image.ops.TransformToGrayscaleOp;
+import org.tensorflow.lite.support.model.Model;
 import org.tensorflow.lite.support.tensorbuffer.TensorBuffer;
 
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -59,6 +70,8 @@ import java.util.Objects;
 import java.util.Queue;
 import java.util.Timer;
 import java.util.TimerTask;
+import java.util.concurrent.Executor;
+import java.util.concurrent.Executors;
 
 public class MainActivity extends CameraActivity {
 
@@ -74,8 +87,7 @@ public class MainActivity extends CameraActivity {
     public Timer framesTimer = new Timer();
 
     //Interval in milliseconds on how often to get frames
-    //Limited to twice a second to prevent tts from going crazy
-    public int frameInterval = 100;
+    public int frameInterval = 300;
 
     //FaceDetector object from MLKit
     public FaceDetector faceDetector;
@@ -88,7 +100,7 @@ public class MainActivity extends CameraActivity {
     public ImageProcessor tfImageProcessor =
             new ImageProcessor.Builder()
                     .add(new ResizeOp(48, 48, ResizeOp.ResizeMethod.BILINEAR))
-                    .add(new TransformToGrayscaleOp())
+                    .add(new ResizeOp(96, 96, ResizeOp.ResizeMethod.BILINEAR))
                     .add(new NormalizeOp(0f, 255f))
                     .build();
 
@@ -223,6 +235,7 @@ public class MainActivity extends CameraActivity {
         super.onDestroy();
     }
 
+
     //endregion
 
     //region Face detection/Tensorflow shit (god save me I'm gonna kill Caden after this)
@@ -253,10 +266,10 @@ public class MainActivity extends CameraActivity {
     public void GetEmotion() {
         //Get bitmaps from the webcam display
         AspectRatioTextureView aspectRatioTextureView =
-                (AspectRatioTextureView) rootView.findViewById(R.id.cameraView);
+               (AspectRatioTextureView) rootView.findViewById(R.id.cameraView);
         ImageView framesImageView = (ImageView) rootView.findViewById(R.id.framesView);
 
-        Bitmap frame = aspectRatioTextureView.getBitmap();
+       Bitmap frame = aspectRatioTextureView.getBitmap();
 
         //Put bitmap in face detector
         InputImage image = InputImage.fromBitmap(frame, 0);
@@ -311,15 +324,20 @@ public class MainActivity extends CameraActivity {
                                                 faceWidth,
                                                 faceHeight);
 
+                                        faceImage = toGrayScale(faceImage);
+
                                         //Process the face image using tensorflow
                                         tensorImage.load(faceImage);
                                         tensorImage = tfImageProcessor.process(tensorImage);
 
                                         try {
-                                            FerModel model = FerModel.newInstance(rootView.getContext());
+                                            // Initialize interpreter
+                                            Model.Options options;
+                                            options = new Model.Options.Builder().setNumThreads(4).build();
+                                            FerModel model = FerModel.newInstance(rootView.getContext(), options);
 
                                             // Creates inputs for reference.
-                                            TensorBuffer inputFeature0 = TensorBuffer.createFixedSize(new int[]{1, 48, 48, 1}, DataType.FLOAT32);
+                                            TensorBuffer inputFeature0 = TensorBuffer.createFixedSize(new int[]{1, 96, 96, 3}, DataType.FLOAT32);
                                             inputFeature0.loadBuffer(tensorImage.getBuffer());
 
                                             // Runs model inference and gets result.
@@ -328,6 +346,9 @@ public class MainActivity extends CameraActivity {
 
                                             //Get the probability buffer from the output
                                             float[] emotionsProbability = outputFeature0.getFloatArray();
+
+                                            // Releases model resources if no longer used.
+                                            model.close();
 
                                             //Get the most likely emotion
                                             //Initialize max with first element of array.
@@ -345,9 +366,6 @@ public class MainActivity extends CameraActivity {
                                             //Get the associated emotion
                                             String emotion = emotionLabels.get(maxIndex);
                                             String outputEmotionLabel = String.format("%s %.2f", emotion, maxProbability * 100) + "%";
-
-                                            // Releases model resources if no longer used.
-                                            model.close();
 
                                             //Draw the bounding rectangle
                                             Bitmap frameMutable = frame.copy(Bitmap.Config.ARGB_8888, true);
@@ -379,7 +397,7 @@ public class MainActivity extends CameraActivity {
                                             Queue<String> prevEmotionsIndv = prevEmotions.get(faceTrackingId);
 
                                             //Determine whether to read the emotion using tts
-                                            if (prevEmotionsIndv.size() >= 4) {
+                                            if (prevEmotionsIndv.size() >= 2) {
                                                 prevEmotionsIndv.remove();
                                             }
 
@@ -404,7 +422,7 @@ public class MainActivity extends CameraActivity {
                                                 lastSpokenEmotions.put(faceTrackingId, emotion);
                                             }
 
-                                        } catch (IOException e) {
+                                        } catch (Exception e) {
                                             // die lol (just draw the unmodified frame bitmap)
                                             framesImageView.setImageBitmap(frame);
                                         }
@@ -426,6 +444,22 @@ public class MainActivity extends CameraActivity {
                         });
     }
 
+    public Bitmap toGrayScale(Bitmap bmpOriginal) {
 
+        int width, height;
+        height = bmpOriginal.getHeight();
+        width = bmpOriginal.getWidth();
+
+        Bitmap bmpGrayscale = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888);
+        Canvas c = new Canvas(bmpGrayscale);
+        Paint paint = new Paint();
+        ColorMatrix cm = new ColorMatrix();
+        cm.setSaturation(0);
+        ColorMatrixColorFilter f = new ColorMatrixColorFilter(cm);
+        paint.setColorFilter(f);
+        c.drawBitmap(bmpOriginal, 0, 0, paint);
+        bmpOriginal.recycle();
+        return bmpGrayscale;
+    }
     //endregion
 }
