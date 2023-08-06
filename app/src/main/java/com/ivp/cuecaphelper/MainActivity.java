@@ -1,31 +1,19 @@
 package com.ivp.cuecaphelper;
 
 import android.Manifest;
-import android.content.BroadcastReceiver;
-import android.content.Context;
-import android.content.Intent;
-import android.content.IntentFilter;
 import android.graphics.Bitmap;
-import android.graphics.BitmapFactory;
 import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.ColorMatrix;
 import android.graphics.ColorMatrixColorFilter;
-import android.graphics.ImageFormat;
 import android.graphics.Paint;
 import android.graphics.Rect;
-import android.graphics.YuvImage;
-import android.hardware.usb.UsbDevice;
-import android.hardware.usb.UsbManager;
+import android.os.Bundle;
 import android.speech.tts.TextToSpeech;
-import android.util.Log;
-import android.view.LayoutInflater;
-import android.view.View;
-import android.view.ViewGroup;
 import android.widget.ImageView;
 
 import androidx.annotation.NonNull;
-import androidx.annotation.Nullable;
+import androidx.appcompat.app.AppCompatActivity;
 
 import com.google.android.gms.tasks.OnFailureListener;
 import com.google.android.gms.tasks.OnSuccessListener;
@@ -37,19 +25,8 @@ import com.google.mlkit.vision.face.FaceDetector;
 import com.google.mlkit.vision.face.FaceDetectorOptions;
 import com.hjq.permissions.XXPermissions;
 import com.ivp.cuecaphelper.ml.FerModel;
-import com.jiangdg.ausbc.MultiCameraClient;
-import com.jiangdg.ausbc.base.CameraActivity;
-import com.jiangdg.ausbc.callback.IPreviewDataCallBack;
-import com.jiangdg.ausbc.camera.bean.CameraRequest;
-import com.jiangdg.ausbc.render.env.RotateType;
-import com.jiangdg.ausbc.widget.AspectRatioTextureView;
-import com.jiangdg.ausbc.widget.IAspectRatio;
 
 import org.tensorflow.lite.DataType;
-import org.tensorflow.lite.Interpreter;
-import org.tensorflow.lite.InterpreterApi;
-import org.tensorflow.lite.gpu.CompatibilityList;
-import org.tensorflow.lite.gpu.GpuDelegate;
 import org.tensorflow.lite.support.common.ops.NormalizeOp;
 import org.tensorflow.lite.support.image.ImageProcessor;
 import org.tensorflow.lite.support.image.TensorImage;
@@ -57,8 +34,6 @@ import org.tensorflow.lite.support.image.ops.ResizeOp;
 import org.tensorflow.lite.support.model.Model;
 import org.tensorflow.lite.support.tensorbuffer.TensorBuffer;
 
-import java.io.ByteArrayOutputStream;
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Hashtable;
@@ -70,15 +45,21 @@ import java.util.Objects;
 import java.util.Queue;
 import java.util.Timer;
 import java.util.TimerTask;
-import java.util.concurrent.Executor;
-import java.util.concurrent.Executors;
+import java.util.concurrent.ExecutionException;
 
-public class MainActivity extends CameraActivity {
+import androidx.camera.core.Camera;
+import androidx.camera.core.CameraSelector;
+import androidx.camera.core.Preview;
+import androidx.camera.lifecycle.ProcessCameraProvider;
+import androidx.camera.view.PreviewView;
+import androidx.core.content.ContextCompat;
+import androidx.lifecycle.LifecycleOwner;
+
+import com.google.common.util.concurrent.ListenableFuture;
+
+public class MainActivity extends AppCompatActivity {
 
     //region Global Variables
-
-    //Stores MainActivity view
-    public View rootView;
 
     //Stores text to speech service
     public TextToSpeech tts;
@@ -88,6 +69,9 @@ public class MainActivity extends CameraActivity {
 
     //Interval in milliseconds on how often to get frames
     public int frameInterval = 300;
+
+    //Camera Preview shit
+    private ListenableFuture<ProcessCameraProvider> cameraProviderFuture;
 
     //FaceDetector object from MLKit
     public FaceDetector faceDetector;
@@ -116,10 +100,10 @@ public class MainActivity extends CameraActivity {
     //endregion
 
     //region App Initialization
-    @Nullable
     @Override
-    protected View getRootView(@NonNull LayoutInflater layoutInflater) {
-        rootView = getLayoutInflater().inflate(R.layout.activity_main, null);
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_main);
 
         //Request perms
         List<String> needPermissions = new ArrayList<>();
@@ -153,81 +137,26 @@ public class MainActivity extends CameraActivity {
                         .build();
         faceDetector = FaceDetection.getClient(faceDetectorOptions);
 
-        //Bind USB events
-        IntentFilter filter = new IntentFilter(UsbManager.ACTION_USB_DEVICE_ATTACHED);
-        registerReceiver(mUsbAttachReceiver, filter);
-        filter = new IntentFilter(UsbManager.ACTION_USB_DEVICE_DETACHED);
-        registerReceiver(mUsbDetachReceiver, filter);
+        //Get camera preview
+        cameraProviderFuture = ProcessCameraProvider.getInstance(this);
+        cameraProviderFuture.addListener(() -> {
+            try {
+                PreviewView previewView = (PreviewView) findViewById(R.id.cameraView);
+                previewView.setScaleType(PreviewView.ScaleType.FILL_CENTER);
+                ProcessCameraProvider cameraProvider = cameraProviderFuture.get();
+                bindPreview(cameraProvider, previewView);
+            } catch (ExecutionException | InterruptedException e) {
+                // No errors need to be handled for this Future.
+                // This should never be reached.
+            }
+        }, ContextCompat.getMainExecutor(this));
 
         //Start frames timer
         framesTimer.scheduleAtFixedRate(new GetFrames(), 0, frameInterval);
-
-        return rootView;
     }
-
-    //endregion
-
-    //region UVC Camera/USB Event Handlers
-    @NonNull
-    @Override
-    public CameraRequest getCameraRequest() {
-        return new CameraRequest.Builder()
-                .setPreviewWidth(485)
-                .setPreviewHeight(360)
-                .setRenderMode(CameraRequest.RenderMode.NORMAL)
-                .setDefaultRotateType(RotateType.ANGLE_0)
-                .setAudioSource(CameraRequest.AudioSource.NONE)
-                .setPreviewFormat(CameraRequest.PreviewFormat.FORMAT_YUYV)
-                .setAspectRatioShow(true)
-                .setCaptureRawImage(true)
-                .setRawPreviewData(true)
-                .create();
-    }
-
-    @Nullable
-    @Override
-    protected IAspectRatio getCameraView() {
-        return (AspectRatioTextureView) rootView.findViewById(R.id.cameraView);
-    }
-
-    @Nullable
-    @Override
-    protected ViewGroup getCameraViewContainer() {
-        return rootView.findViewById(R.id.cameraViewContainer);
-    }
-
-    @Override
-    public void onCameraState(@NonNull MultiCameraClient.ICamera iCamera, @NonNull State state, @Nullable String s) {
-    }
-
-    BroadcastReceiver mUsbAttachReceiver = new BroadcastReceiver() {
-        public void onReceive(Context context, Intent intent) {
-            String action = intent.getAction();
-
-            if (UsbManager.ACTION_USB_DEVICE_ATTACHED.equals(action)) {
-                tts.speak("Webcam attached.", TextToSpeech.QUEUE_FLUSH, null, String.valueOf(java.util.UUID.randomUUID()));
-            }
-        }
-    };
-
-    BroadcastReceiver mUsbDetachReceiver = new BroadcastReceiver() {
-        public void onReceive(Context context, Intent intent) {
-            String action = intent.getAction();
-
-            if (UsbManager.ACTION_USB_DEVICE_DETACHED.equals(action)) {
-                UsbDevice device = (UsbDevice) intent.getParcelableExtra(UsbManager.EXTRA_DEVICE);
-                if (device != null) {
-                    tts.speak("Webcam detached.", TextToSpeech.QUEUE_FLUSH, null, String.valueOf(java.util.UUID.randomUUID()));
-                }
-            }
-        }
-    };
 
     @Override
     public void onDestroy() {
-        unregisterReceiver(mUsbDetachReceiver);
-        unregisterReceiver(mUsbAttachReceiver);
-
         //Kill the framesTimer if running
         framesTimer.cancel();
         framesTimer.purge();
@@ -235,41 +164,46 @@ public class MainActivity extends CameraActivity {
         super.onDestroy();
     }
 
-
     //endregion
 
     //region Face detection/Tensorflow shit (god save me I'm gonna kill Caden after this)
+
+    //Function to get camera preview
+    public void bindPreview(@NonNull ProcessCameraProvider cameraProvider, PreviewView previewView) {
+        Preview preview = new Preview.Builder()
+                .build();
+
+        CameraSelector cameraSelector = new CameraSelector.Builder()
+                .requireLensFacing(CameraSelector.LENS_FACING_BACK)
+                .build();
+
+        preview.setSurfaceProvider(previewView.getSurfaceProvider());
+
+        Camera camera = cameraProvider.bindToLifecycle((LifecycleOwner) this, cameraSelector, preview);
+    }
 
     private class GetFrames extends TimerTask {
         //This thing's a goddamn mess
         @Override
         public void run() {
-            if (isCameraOpened()) {
-                runOnUiThread(new Runnable() {
-                    @Override
-                    public void run() {
-                        GetEmotion();
+            runOnUiThread(new Runnable() {
+                @Override
+                public void run() {
+                    //Get bitmaps from the webcam display
+                    PreviewView previewView = (PreviewView) findViewById(R.id.cameraView);
+                    Bitmap frame = previewView.getBitmap();
+
+                    if (frame != null) {
+                        GetEmotion(frame);
                     }
-                });
-            } else {
-                runOnUiThread(new Runnable() {
-                    @Override
-                    public void run() {
-                        ImageView framesImageView = (ImageView) rootView.findViewById(R.id.framesView);
-                        framesImageView.setImageBitmap(null);
-                    }
-                });
-            }
+                }
+            });
         }
     }
 
-    public void GetEmotion() {
-        //Get bitmaps from the webcam display
-        AspectRatioTextureView aspectRatioTextureView =
-               (AspectRatioTextureView) rootView.findViewById(R.id.cameraView);
-        ImageView framesImageView = (ImageView) rootView.findViewById(R.id.framesView);
-
-       Bitmap frame = aspectRatioTextureView.getBitmap();
+    public void GetEmotion(Bitmap frame) {
+        //Get imageview to put processed image
+        ImageView framesImageView = (ImageView) findViewById(R.id.framesView);
 
         //Put bitmap in face detector
         InputImage image = InputImage.fromBitmap(frame, 0);
@@ -291,10 +225,10 @@ public class MainActivity extends CameraActivity {
                                         int faceHeight = 0;
 
                                         if (faceX <= 0) {
-                                            faceWidth = Math.min(485, bounds.right);
+                                            faceWidth = Math.min(480, bounds.right);
                                             faceX = 0;
                                         } else if (faceX > 0) {
-                                            faceWidth = Math.min(bounds.width(), 485 - bounds.left);
+                                            faceWidth = Math.min(bounds.width(), 480 - bounds.left);
                                         }
 
                                         if (faceY <= 0) {
@@ -309,7 +243,7 @@ public class MainActivity extends CameraActivity {
                                         faceHeight = Math.max(1, faceHeight);
 
                                         //Set the faceX to be no more than width, faceY to be no more than height
-                                        faceX = Math.min(faceX, 484);
+                                        faceX = Math.min(faceX, 479);
                                         faceY = Math.min(faceY, 359);
 
 //                                        Log.d("face cropping", Integer.toString(faceX) + " "
@@ -334,7 +268,7 @@ public class MainActivity extends CameraActivity {
                                             // Initialize interpreter
                                             Model.Options options;
                                             options = new Model.Options.Builder().setNumThreads(4).build();
-                                            FerModel model = FerModel.newInstance(rootView.getContext(), options);
+                                            FerModel model = FerModel.newInstance(getApplicationContext(), options);
 
                                             // Creates inputs for reference.
                                             TensorBuffer inputFeature0 = TensorBuffer.createFixedSize(new int[]{1, 96, 96, 3}, DataType.FLOAT32);
@@ -443,6 +377,7 @@ public class MainActivity extends CameraActivity {
                             }
                         });
     }
+
 
     public Bitmap toGrayScale(Bitmap bmpOriginal) {
 

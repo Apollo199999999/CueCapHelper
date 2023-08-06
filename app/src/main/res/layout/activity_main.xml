@@ -37,12 +37,12 @@
 
             <FrameLayout
                 android:id="@+id/cameraViewContainer"
-                android:layout_width="485px"
+                android:layout_width="480px"
                 android:layout_height="360px"
                 android:layout_marginTop="8dp"
                 android:background="@color/black">
 
-                <com.jiangdg.ausbc.widget.AspectRatioTextureView
+                <androidx.camera.view.PreviewView
                     android:id="@+id/cameraView"
                     android:layout_width="match_parent"
                     android:layout_height="match_parent" />
