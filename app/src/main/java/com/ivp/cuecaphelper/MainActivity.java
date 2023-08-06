@@ -84,7 +84,7 @@ public class MainActivity extends AppCompatActivity {
     public ImageProcessor tfImageProcessor =
             new ImageProcessor.Builder()
                     .add(new ResizeOp(48, 48, ResizeOp.ResizeMethod.BILINEAR))
-                    .add(new ResizeOp(96, 96, ResizeOp.ResizeMethod.BILINEAR))
+                    .add(new ResizeOp(75, 75, ResizeOp.ResizeMethod.BILINEAR))
                     .add(new NormalizeOp(0f, 255f))
                     .build();
 
@@ -271,7 +271,7 @@ public class MainActivity extends AppCompatActivity {
                                             FerModel model = FerModel.newInstance(getApplicationContext(), options);
 
                                             // Creates inputs for reference.
-                                            TensorBuffer inputFeature0 = TensorBuffer.createFixedSize(new int[]{1, 96, 96, 3}, DataType.FLOAT32);
+                                            TensorBuffer inputFeature0 = TensorBuffer.createFixedSize(new int[]{1, 75, 75, 3}, DataType.FLOAT32);
                                             inputFeature0.loadBuffer(tensorImage.getBuffer());
 
                                             // Runs model inference and gets result.
