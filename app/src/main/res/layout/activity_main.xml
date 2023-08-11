@@ -9,10 +9,6 @@
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:layout_marginStart="16dp"
-        android:layout_marginTop="16dp"
-        android:layout_marginEnd="16dp"
-        android:layout_marginBottom="16dp"
         android:orientation="horizontal"
         app:layout_constraintBottom_toTopOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
@@ -22,24 +18,14 @@
         <LinearLayout
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_weight="0"
             android:orientation="vertical"
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintTop_toTopOf="parent">
 
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:maxWidth="485px"
-                android:text="Unprocessed camera frames:"
-                android:textAlignment="center"
-                android:textSize="18dp" />
-
             <FrameLayout
                 android:id="@+id/cameraViewContainer"
-                android:layout_width="480px"
-                android:layout_height="360px"
-                android:layout_marginTop="8dp"
+                android:layout_width="360px"
+                android:layout_height="480px"
                 android:background="@color/black">
 
                 <androidx.camera.view.PreviewView
@@ -51,25 +37,18 @@
 
         <LinearLayout
             android:layout_width="wrap_content"
-            android:layout_height="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
             android:layout_marginStart="8dp"
-            android:layout_weight="1"
-            android:orientation="vertical">
-
-            <TextView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:gravity="center"
-                android:text="Emotion detected by Tensorflow model:"
-                android:textAlignment="center"
-                android:textSize="18dp" />
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toTopOf="parent">
 
             <ImageView
                 android:id="@+id/framesView"
-                android:layout_width="match_parent"
-                android:layout_height="match_parent"
-                android:layout_marginTop="8dp" />
+                android:layout_width="210px"
+                android:layout_height="280px" />
         </LinearLayout>
+
 
     </LinearLayout>
 

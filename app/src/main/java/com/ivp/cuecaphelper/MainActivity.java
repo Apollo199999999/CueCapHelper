@@ -6,6 +6,7 @@ import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.ColorMatrix;
 import android.graphics.ColorMatrixColorFilter;
+import android.graphics.Matrix;
 import android.graphics.Paint;
 import android.graphics.Rect;
 import android.os.Bundle;
@@ -194,6 +195,7 @@ public class MainActivity extends AppCompatActivity {
                     Bitmap frame = previewView.getBitmap();
 
                     if (frame != null) {
+                        frame = RotateBitmap(frame, 270);
                         GetEmotion(frame);
                     }
                 }
@@ -316,7 +318,7 @@ public class MainActivity extends AppCompatActivity {
                                             textPaint.setTextSize(18f);
                                             canvas.drawText(outputEmotionLabel, bounds.left, bounds.top - 20, textPaint);
 
-                                            framesImageView.setImageBitmap(frameMutable);
+                                            framesImageView.setImageBitmap(RotateBitmap(frameMutable, -270));
 
                                             //Get the id of the detected face
                                             int faceTrackingId = face.getTrackingId();
@@ -358,13 +360,13 @@ public class MainActivity extends AppCompatActivity {
 
                                         } catch (Exception e) {
                                             // die lol (just draw the unmodified frame bitmap)
-                                            framesImageView.setImageBitmap(frame);
+                                            framesImageView.setImageBitmap(RotateBitmap(frame, -270));
                                         }
 
                                     }
                                 } else {
                                     //Just set the unmodified frame bitmap
-                                    framesImageView.setImageBitmap(frame);
+                                    framesImageView.setImageBitmap(RotateBitmap(frame, -270));
                                 }
                             }
                         })
@@ -373,7 +375,7 @@ public class MainActivity extends AppCompatActivity {
                             @Override
                             public void onFailure(@NonNull Exception e) {
                                 //Just set the unmodified frame bitmap
-                                framesImageView.setImageBitmap(frame);
+                                framesImageView.setImageBitmap(RotateBitmap(frame, -270));
                             }
                         });
     }
@@ -395,6 +397,13 @@ public class MainActivity extends AppCompatActivity {
         c.drawBitmap(bmpOriginal, 0, 0, paint);
         bmpOriginal.recycle();
         return bmpGrayscale;
+    }
+
+    public static Bitmap RotateBitmap(Bitmap source, float angle)
+    {
+        Matrix matrix = new Matrix();
+        matrix.postRotate(angle);
+        return Bitmap.createBitmap(source, 0, 0, source.getWidth(), source.getHeight(), matrix, true);
     }
     //endregion
 }
