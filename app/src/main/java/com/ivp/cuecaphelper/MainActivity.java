@@ -217,6 +217,13 @@ public class MainActivity extends AppCompatActivity {
                             public void onSuccess(List<Face> faces) {
                                 if (faces.size() > 0) {
                                     for (Face face : faces) {
+                                        //To prevent sideways face detection
+                                        if (face.getHeadEulerAngleY() < -20 || face.getHeadEulerAngleY() > 20) {
+                                            //Just set the unmodified frame bitmap
+                                            framesImageView.setImageBitmap(RotateBitmap(frame, -270));
+                                            break;
+                                        }
+
                                         Rect bounds = face.getBoundingBox();
 
                                         //God forgive me for this cursed code I am about to do
